@@ -15,18 +15,6 @@
 
 ## 安装
 
-### 使用pip
-
-```bash
-pip install beatoven-ai
-```
-
-### 使用uv
-
-```bash
-uv install beatoven-ai
-```
-
 ### 从源码安装
 
 ```bash

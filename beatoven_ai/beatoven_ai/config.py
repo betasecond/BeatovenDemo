@@ -1,6 +1,8 @@
 """
 Configuration module with environment variable support.
 """
+from pathlib import Path
+from typing import Optional, Union
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -50,16 +52,48 @@ class Settings(BaseSettings):
         description="Interval in seconds between status checks"
     )
     
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        env_prefix="BEATOVEN_",
-        case_sensitive=False,
-    )
+    # The model_config will be set based on the env_file parameter when creating the instance
 
 
-# Create and export a global settings instance
-settings = Settings()
+def get_settings(env_file: Optional[Union[str, Path]] = None) -> Settings:
+    """
+    Create and return a Settings instance with optional custom env file path.
+    
+    Args:
+        env_file: Optional path to a custom .env file. Can be string or Path object.
+               If None, defaults to looking for ".env" in the current directory.
+    
+    Returns:
+        Settings instance configured with the specified env file
+    """
+    config_dict = {
+        "env_file_encoding": "utf-8",
+        "env_prefix": "BEATOVEN_",
+        "case_sensitive": False,
+    }
+    
+    if env_file is not None:
+        # Convert to Path if it's a string
+        if isinstance(env_file, str):
+            env_file = Path(env_file)
+            
+        # Ensure the file exists
+        if not env_file.exists():
+            print(f"Warning: Environment file {env_file} not found. Using default settings.")
+        
+        config_dict["env_file"] = str(env_file)
+    else:
+        config_dict["env_file"] = ".env"
+    
+    # Create a new Settings class with the dynamic model_config
+    class DynamicSettings(Settings):
+        model_config = SettingsConfigDict(**config_dict)
+    
+    return DynamicSettings()
+
+
+# Create and export a global settings instance with default env file location
+settings = get_settings()
 
 # For backward compatibility, maintain these constants
 BACKEND_V1_API_URL = settings.API_URL

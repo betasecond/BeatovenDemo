@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional, Union
 import aiofiles
 import aiohttp
 
-from .config import settings
+from .config import get_settings, settings
 from .logger import logger
 from .models import TaskResponse, TextPrompt, TrackRequest, TrackStatus
 
@@ -24,15 +24,20 @@ class BeatovenClient:
     Provides methods for generating music based on text prompts.
     """
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, env_file: Optional[Union[str, Path]] = None):
         """
         Initialize the Beatoven.ai client.
         
         Args:
             api_key: Optional API key. If not provided, will use the one from settings.
+            env_file: Optional path to a custom .env file. If provided, will load settings from this file.
         """
-        self.api_key = api_key or settings.API_KEY
-        self.api_url = settings.API_URL
+        # Load custom settings if env_file is provided
+        self.settings = get_settings(env_file) if env_file else settings
+        
+        # Use the provided API key or the one from settings
+        self.api_key = api_key or self.settings.API_KEY
+        self.api_url = self.settings.API_URL
         
         # Validate API key
         if not self.api_key:
@@ -69,7 +74,7 @@ class BeatovenClient:
                 f"{self.api_url}/tracks/compose",
                 json=data,
                 headers={"Authorization": f"Bearer {self.api_key}"},
-                timeout=settings.REQUEST_TIMEOUT
+                timeout=self.settings.REQUEST_TIMEOUT
             ) as response:
                 response_data = await response.json()
                 
@@ -112,7 +117,7 @@ class BeatovenClient:
             async with session.get(
                 f"{self.api_url}/tasks/{task_id}",
                 headers={"Authorization": f"Bearer {self.api_key}"},
-                timeout=settings.REQUEST_TIMEOUT
+                timeout=self.settings.REQUEST_TIMEOUT
             ) as response:
                 if response.status == 200:
                     data = await response.json()
@@ -160,7 +165,7 @@ class BeatovenClient:
             BeatovenAIError: If downloading fails
         """
         # Determine output directory
-        output_dir = Path(output_path or settings.OUTPUT_DIR)
+        output_dir = Path(output_path or self.settings.OUTPUT_DIR)
         output_dir.mkdir(parents=True, exist_ok=True)
         
         # Generate filename if not provided
@@ -177,7 +182,7 @@ class BeatovenClient:
         logger.info(f"Downloading track to {file_path}")
         
         try:
-            async with session.get(track_url, timeout=settings.DOWNLOAD_TIMEOUT) as response:
+            async with session.get(track_url, timeout=self.settings.DOWNLOAD_TIMEOUT) as response:
                 if response.status == 200:
                     async with aiofiles.open(file_path, "wb") as f:
                         await f.write(await response.read())
@@ -220,7 +225,7 @@ class BeatovenClient:
         Raises:
             BeatovenAIError: If the task fails
         """
-        polling_interval = interval or settings.POLLING_INTERVAL
+        polling_interval = interval or self.settings.POLLING_INTERVAL
         logger.info(f"Watching task {task_id} with {polling_interval}s polling interval")
         
         while True:
@@ -261,8 +266,8 @@ class BeatovenClient:
             BeatovenAIError: If any step of the generation process fails
         """
         # Use defaults from settings if not provided
-        duration = duration or settings.DEFAULT_DURATION
-        format = format or settings.DEFAULT_FORMAT
+        duration = duration or self.settings.DEFAULT_DURATION
+        format = format or self.settings.DEFAULT_FORMAT
         
         track_request = TrackRequest(
             prompt=TextPrompt(text=prompt),

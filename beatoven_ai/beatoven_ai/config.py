@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Optional, Union
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+import os
 
 
 class Settings(BaseSettings):
@@ -55,13 +56,46 @@ class Settings(BaseSettings):
     # The model_config will be set based on the env_file parameter when creating the instance
 
 
+def find_env_file(default_name: str = ".env") -> Optional[Path]:
+    """
+    Find the .env file by looking in several common locations.
+    
+    Args:
+        default_name: Default environment file name to look for
+        
+    Returns:
+        Path to the found env file or None if not found
+    """
+    # Places to look for the .env file in order of preference
+    search_paths = [
+        # Current working directory
+        Path.cwd() / default_name,
+        
+        # Module directory
+        Path(__file__).parent / default_name,
+        
+        # Package root directory
+        Path(__file__).parent.parent.parent / default_name,
+        
+        # User home directory
+        Path.home() / default_name
+    ]
+    
+    # Look for the .env file
+    for path in search_paths:
+        if path.exists():
+            return path
+    
+    return None
+
+
 def get_settings(env_file: Optional[Union[str, Path]] = None) -> Settings:
     """
     Create and return a Settings instance with optional custom env file path.
     
     Args:
         env_file: Optional path to a custom .env file. Can be string or Path object.
-               If None, defaults to looking for ".env" in the current directory.
+               If None, will search for ".env" in common locations.
     
     Returns:
         Settings instance configured with the specified env file
@@ -75,15 +109,20 @@ def get_settings(env_file: Optional[Union[str, Path]] = None) -> Settings:
     if env_file is not None:
         # Convert to Path if it's a string
         if isinstance(env_file, str):
-            env_file = Path(env_file)
+            env_file = Path(env_file).resolve()
             
         # Ensure the file exists
         if not env_file.exists():
             print(f"Warning: Environment file {env_file} not found. Using default settings.")
-        
-        config_dict["env_file"] = str(env_file)
+            # Don't set env_file if it doesn't exist
+        else:
+            config_dict["env_file"] = str(env_file)
     else:
-        config_dict["env_file"] = ".env"
+        # Try to find the .env file in common locations
+        found_env_file = find_env_file()
+        if found_env_file:
+            config_dict["env_file"] = str(found_env_file)
+            print(f"Using environment file: {found_env_file}")
     
     # Create a new Settings class with the dynamic model_config
     class DynamicSettings(Settings):

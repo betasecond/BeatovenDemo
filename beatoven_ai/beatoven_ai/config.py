@@ -3,8 +3,8 @@ Configuration module with environment variable support.
 """
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional, Union
-from pydantic import Field
+from typing import Optional, Union, Dict, Any
+from pydantic import Field, Extra
 from pydantic_settings import BaseSettings, SettingsConfigDict
 import os
 
@@ -54,7 +54,10 @@ class Settings(BaseSettings):
         description="Interval in seconds between status checks"
     )
     
-    # The model_config will be set based on the env_file parameter when creating the instance
+    # Allow extra fields so we can load from env files with additional variables
+    model_config = SettingsConfigDict(
+        extra="ignore",  # Allow extra fields and ignore them
+    )
 
 
 def find_env_file(default_name: str = ".env") -> Optional[Path]:
@@ -107,6 +110,7 @@ def get_settings(env_file: Optional[Union[str, Path]] = None) -> Settings:
         "env_file_encoding": "utf-8",
         "env_prefix": "BEATOVEN_",
         "case_sensitive": False,
+        "extra": "ignore",  # Allow extra fields in the env file
     }
     
     if env_file is not None:
@@ -115,13 +119,13 @@ def get_settings(env_file: Optional[Union[str, Path]] = None) -> Settings:
             env_file = Path(env_file).resolve()
             
         # Ensure the file exists
-        if not env_file.exists():
-            print(f"Warning: Environment file {env_file} not found. Using default settings.")
-            # Don't set env_file if it doesn't exist
-        else:
+        if env_file.exists():
             config_dict["env_file"] = str(env_file)
+            # Don't print anything if the file exists - let the caller handle messaging
+        else:
+            print(f"Warning: Specified environment file {env_file} not found. Using default settings without any env file.")
     else:
-        # Try to find the .env file in common locations
+        # Only search for .env file if no specific file was provided
         found_env_file = find_env_file()
         if found_env_file:
             config_dict["env_file"] = str(found_env_file)

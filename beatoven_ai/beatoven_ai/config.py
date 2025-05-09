@@ -1,6 +1,7 @@
 """
 Configuration module with environment variable support.
 """
+from functools import lru_cache
 from pathlib import Path
 from typing import Optional, Union
 from pydantic import Field
@@ -89,6 +90,8 @@ def find_env_file(default_name: str = ".env") -> Optional[Path]:
     return None
 
 
+# Cache the settings objects to avoid recreating them
+@lru_cache(maxsize=32)
 def get_settings(env_file: Optional[Union[str, Path]] = None) -> Settings:
     """
     Create and return a Settings instance with optional custom env file path.
@@ -131,10 +134,41 @@ def get_settings(env_file: Optional[Union[str, Path]] = None) -> Settings:
     return DynamicSettings()
 
 
-# Create and export a global settings instance with default env file location
-settings = get_settings()
+# Create a lazy-loaded settings property
+class LazySettings:
+    """Lazy-loaded settings that only get initialized when accessed."""
+    _instance = None
+    
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._settings = None
+        return cls._instance
+    
+    @property
+    def settings(self):
+        """Get or create the settings instance."""
+        if self._settings is None:
+            self._settings = get_settings()
+        return self._settings
+    
+    def __getattr__(self, name):
+        """Forward attribute access to the settings object."""
+        return getattr(self.settings, name)
 
-# For backward compatibility, maintain these constants
-BACKEND_V1_API_URL = settings.API_URL
-# Use the provided API key or the one from environment variables
-BACKEND_API_HEADER_KEY = settings.API_KEY or "-xBRMpR9cjzS8cwQFF53Dw"
+
+# Export a lazy-loaded global settings instance
+settings = LazySettings()
+
+# For backward compatibility, define constants as properties
+def get_backend_v1_api_url():
+    """Get API URL from settings lazily."""
+    return settings.API_URL
+
+def get_backend_api_header_key():
+    """Get API key from settings lazily, with fallback."""
+    return settings.API_KEY or "-xBRMpR9cjzS8cwQFF53Dw"
+
+# Define properties for backward compatibility
+BACKEND_V1_API_URL = property(get_backend_v1_api_url)
+BACKEND_API_HEADER_KEY = property(get_backend_api_header_key)

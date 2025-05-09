@@ -32,8 +32,8 @@ class BeatovenClient:
             api_key: Optional API key. If not provided, will use the one from settings.
             env_file: Optional path to a custom .env file. If provided, will load settings from this file.
         """
-        # Load custom settings if env_file is provided
-        self.settings = get_settings(env_file) if env_file else settings
+        # Load custom settings if env_file is provided, otherwise use the global settings
+        self.settings = get_settings(env_file) if env_file else settings.settings
         
         # Use the provided API key or the one from settings
         self.api_key = api_key or self.settings.API_KEY
